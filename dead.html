@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Automated Deadlock Detection Tool</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #eef5ff;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #003366;
+    }
+
+    .container {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      max-width: 850px;
+      margin: auto;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+
+    input {
+      width: 60px;
+      text-align: center;
+      padding: 5px;
+      margin: 3px;
+    }
+
+    button {
+      background-color: #004aad;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    button:hover {
+      background-color: #0073ff;
+    }
+
+    table {
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    td {
+      border: 1px solid #ccc;
+      padding: 5px;
+    }
+
+    #result {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 8px;
+      font-weight: bold;
+      color: #002244;
+      white-space: pre-line;
+    }
+
+    #result.safe {
+      background-color: #d6f8d6;
+      color: #085f08;
+    }
+
+    #result.deadlock {
+      background-color: #ffe0e0;
+      color: #9b0000;
+    }
+
+    #autoSuggestion {
+      margin-top: 15px;
+      background: #fff7e6;
+      padding: 15px;
+      border-left: 5px solid #ff9900;
+      border-radius: 8px;
+      display: none;
+    }
+
+    #autoSuggestion h3 {
+      color: #cc6600;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 14px;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Automated Deadlock Detection Tool</h1>
+
+    <p><b>Enter number of processes and resources:</b></p>
+    <label>Processes:</label>
+    <input type="number" id="processes" min="1" value="3">
+    <label>Resources:</label>
+    <input type="number" id="resources" min="1" value="3">
+    <button onclick="generateTables()">Generate Tables</button>
+
+    <div id="tables"></div>
+    <button id="detectBtn" style="display:none;" onclick="detectDeadlock()">Detect Deadlock</button>
+
+    <div id="result"></div>
+
+    <div id="autoSuggestion"></div>
+  </div>
+
+  <div class="footer">
+    
+
+    
+  </div>
+
+  <script>
+    function generateTables() {
+      const n = parseInt(document.getElementById("processes").value);
+      const m = parseInt(document.getElementById("resources").value);
+      const tablesDiv = document.getElementById("tables");
+      tablesDiv.innerHTML = "";
+
+      const matrices = ["Allocation", "Request"];
+      matrices.forEach(type => {
+        let html = `<h3>${type} Matrix</h3><table>`;
+        for (let i = 0; i < n; i++) {
+          html += "<tr>";
+          for (let j = 0; j < m; j++) {
+            html += `<td><input type="number" id="${type}_${i}_${j}" value="0"></td>`;
+          }
+          html += "</tr>";
+        }
+        html += "</table>";
+        tablesDiv.innerHTML += html;
+      });
+
+      let availHTML = `<h3>Available Resources</h3><table><tr>`;
+      for (let j = 0; j < m; j++) {
+        availHTML += `<td><input type="number" id="Avail_${j}" value="0"></td>`;
+      }
+      availHTML += "</tr></table>";
+      tablesDiv.innerHTML += availHTML;
+
+      document.getElementById("detectBtn").style.display = "inline-block";
+      document.getElementById("result").innerHTML = "";
+      document.getElementById("autoSuggestion").style.display = "none";
+    }
+
+    function detectDeadlock() {
+      const n = parseInt(document.getElementById("processes").value);
+      const m = parseInt(document.getElementById("resources").value);
+      let alloc = [], req = [], avail = [], finish = Array(n).fill(false);
+
+      for (let i = 0; i < n; i++) {
+        alloc[i] = [];
+        req[i] = [];
+        for (let j = 0; j < m; j++) {
+          alloc[i][j] = parseInt(document.getElementById(`Allocation_${i}_${j}`).value);
+          req[i][j] = parseInt(document.getElementById(`Request_${i}_${j}`).value);
+        }
+      }
+
+      for (let j = 0; j < m; j++)
+        avail[j] = parseInt(document.getElementById(`Avail_${j}`).value);
+
+      let count = 0;
+      while (count < n) {
+        let found = false;
+        for (let i = 0; i < n; i++) {
+          if (!finish[i]) {
+            let canRun = true;
+            for (let j = 0; j < m; j++) {
+              if (req[i][j] > avail[j]) {
+                canRun = false;
+                break;
+              }
+            }
+            if (canRun) {
+              for (let j = 0; j < m; j++)
+                avail[j] += alloc[i][j];
+              finish[i] = true;
+              found = true;
+              count++;
+            }
+          }
+        }
+        if (!found) break;
+      }
+
+      const deadlocked = [];
+      for (let i = 0; i < n; i++) {
+        if (!finish[i]) deadlocked.push("P" + i);
+      }
+
+      const resultDiv = document.getElementById("result");
+      const suggestionDiv = document.getElementById("autoSuggestion");
+
+      if (deadlocked.length === 0) {
+        resultDiv.className = "safe";
+        resultDiv.innerText = "✅ No Deadlock Detected.\nSystem is in Safe State.";
+        suggestionDiv.style.display = "none";
+      } else {
+        resultDiv.className = "deadlock";
+        resultDiv.innerText = "⚠️ Deadlock Detected!\nProcesses in Deadlock: " + deadlocked.join(", ");
+        suggestionDiv.style.display = "block";
+
+        suggestionDiv.innerHTML = `
+          <h3>💡 Suggested Steps to Avoid Deadlock:</h3>
+          <ul>
+            <li>1️⃣ **Avoid Circular Wait** — Impose an ordering of resources and request them in order.</li>
+            <li>2️⃣ **Hold and Wait Prevention** — Request all resources at once before execution.</li>
+            <li>3️⃣ **Use Banker's Algorithm** — Check system safety before granting requests.</li>
+            <li>4️⃣ **Resource Preemption** — Temporarily take resources from lower priority processes.</li>
+            <li>5️⃣ **Process Rollback** — Abort or rollback one of the deadlocked processes to break the cycle.</li>
+          </ul>
+          <p><b>Tip:</b> Try modifying your allocation or available matrix to ensure all processes can eventually complete.</p>
+        `;
+      }
+    }
+  </script>
+</body>
+</html>
